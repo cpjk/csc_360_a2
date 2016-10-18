@@ -30,5 +30,23 @@ typedef struct Flow {
 //   return -1 if flow1 higher (goes BEFORE) flow2, 0 if equal,
 //   1 if flow1 is lower (goes AFTER flow2
 
+
+// execution:
+// 1 main thread.
+// main thread maintains array of worker flow threads
+// main thread starts ticking every tenths of a second
+//
+// when one of the threads' starting time is reached, start the thread with the current s tarting time that has should be started based on the priority ranking function
+//
+// join on that thread
+//
+// after join, pick next thread from the threads that have arrival times less than or equal to the current time based on appropriate function
+//
+// every tick, output appropriate status messages:
+// flow arrives
+// flow waits
+// flow starts transmission
+// flow finishes transmission
+
 int main(int argc, char **argv) {
 }
