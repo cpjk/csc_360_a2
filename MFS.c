@@ -17,7 +17,7 @@
 // ALGORITHM:
 // read thread info
 // start all threads
-// each thread sleeps until it arrives, then tries to write to the output pipe by calling requestPipe
+// each thread sleeps until it arrives, then tries to write to the output pipe by calling request_pipe
 // lock mutex
 // if pipe is available and the wait queue is empty, transmit and then release the lock
 // else, add yourself to the queue (we already have the lock, which will guard writing to the queue),
@@ -25,7 +25,7 @@
 //   then enter a loop that will wait for you to be at the front of the queue and for the convar to be signalled
 // when convar is signalled, we try to acquire the lock, and then check if we are at the front of the queue. if not, re-wait
 // on the convar to be signalled again.
-// if we are at the front of the queue, remove ourself from the queue, release the lock, then return from requestPipe,
+// if we are at the front of the queue, remove ourself from the queue, release the lock, then return from request_pipe,
 // which causes us to transmit.
 // after transmitting, we call releasePipe, which signals to the convar, causing the waiting threads to contend for the transmission
 //
@@ -40,6 +40,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <pthread.h>
+#include <unistd.h>
 
 typedef struct Flow {
   int number;
@@ -50,25 +51,52 @@ typedef struct Flow {
 } Flow;
 
 #define MAXFLOW 500 // the maximum number of flows
+#define IN_USE 1
+#define NOT_IN_USE 0
 
 Flow flow_list[MAXFLOW];   // parse input in an array of flow
-Flow *queueList[MAXFLOW];  // store waiting flows while transmission pipe is occupied.
+Flow *queue[MAXFLOW];  // store waiting flows while transmission pipe is occupied.
+unsigned int queue_size = 0;
 pthread_t thread_list[MAXFLOW]; // each thread executes one flow
 pthread_mutex_t trans_mtx = PTHREAD_MUTEX_INITIALIZER ;
 pthread_cond_t trans_cvar = PTHREAD_COND_INITIALIZER ;
+unsigned int pipe_activity;
 
-// item is the Flow corresponding to this thread
-/* void requestPipe(Flow *item) { */
+int comp_func(const void *, const void *);
+
+// wait on mutex to check queue and write to it
+// --> next, check if someone else is transmitting
+// if not, and no one else is on the queue, set pipe_activity = IN_USE
+// we set IN_USE inside the lock, and read it inside the lock.
+//
+// we set NOT_IN_USE outside the lock, but only the currently using thread can do this. will this be ok?
+// possibilities: pipe in use, other thread checks it, sees in use, waits.
+//                pipe in use, release use, other thread checks it, sees not in use, starts using
+//
+//                need to make sure we set NOT_IN_USE before signalling end of transmission
+
+// release mutex,
+
+// flow is the Flow corresponding to this thread
+/* void request_pipe(Flow *flow) { */
 /*   // lock mutex */
 /*   pthread_mutex_lock(&trans_mtx); */
 
+/*   // if the queue is empty and the pipe is not in use, start transmitting */
+/*   if(!queue[0] && pipe_activity == NOT_IN_USE) { */
+/*     printf("Flow %i found the queue empty.\n", flow->number); */
+/*     pipe_activity = IN_USE; */
+/*     pthread_mutex_unlock; */
+/*     return; */
+/*   } */
 /*   /1* if transmission pipe available && queue is empty { *1/ */
 /*   /1*   ...do some stuff.. *1/ */
 /*   /1*     unlock mutex; *1/ */
 /*   /1*   return ; *1/ */
 /*   /1* } *1/ */
 
-/*   // add item in queue, sort the queue according rules */
+/*   // add flow to queue, sort the queue according rules */
+/*   add_flow_to_queue(flow); */
 
 /*   // printf(Waiting...); */
 /*   // key point here.. */
@@ -82,9 +110,76 @@ pthread_cond_t trans_cvar = PTHREAD_COND_INITIALIZER ;
 
 /*   // update queue */
 
-/*   // unlock mutex; */
 /*   pthread_mutex_unlock; */
 /* } */
+
+void add_flow_to_queue(Flow *flow) {
+  if(queue_size == MAXFLOW) {
+    printf("Max queue size limit reached.");
+    exit(-1);
+  }
+
+  printf("\n");
+  fflush(stdout);
+  queue[queue_size] = flow;
+  queue_size++;
+
+  printf("\nQueue before sorting:\n");
+  for(int i = 0; i < queue_size; i++) {
+    printf("flow: %i\n", queue[i]->number);
+  }
+
+  qsort(queue, queue_size, sizeof(Flow*), comp_func);
+}
+
+// flow_1 and flow_2 are Flow **
+int comp_func(const void *flow_1, const void *flow_2) {
+  // -1 if flow_1 before flow_2
+  // 0 if same
+  // 1 if flow_2 goes before flow_1
+
+  Flow *flow_1_ptr = *((Flow **) flow_1);
+  Flow *flow_2_ptr = *((Flow **) flow_2);
+
+ // lower priority goes first
+  if(flow_1_ptr->priority < flow_2_ptr->priority) { // flow_1 goes first
+    return -1;
+  }
+  else if(flow_1_ptr->priority > flow_2_ptr->priority) { // flow_2 goes first
+    return 1;
+  }
+  else { // fall back to arrival time
+    /* printf("%i and %i have same priority. falling back to arrival time\n", flow_1_ptr->number, flow_2_ptr->number); */
+    if(flow_1_ptr->arrival_time_mis < flow_2_ptr->arrival_time_mis) { // flow_1 goes first
+      return -1;
+    }
+    else if(flow_1_ptr->arrival_time_mis > flow_2_ptr->arrival_time_mis) { // flow_2 goes first
+      return 1;
+    }
+    else { // fall back to transmission time
+      /* printf("%i and %i have same arrival time. falling back to trans time\n", flow_1_ptr->number, flow_2_ptr->number); */
+      if(flow_1_ptr->trans_time_mis < flow_2_ptr->trans_time_mis) { // flow_1 goes first
+        return -1;
+      }
+      else if(flow_1_ptr->trans_time_mis > flow_2_ptr->trans_time_mis) { // flow_2 goes first
+        return 1;
+      }
+      else { // fall back to input file order
+        /* printf("%i and %i have same trans time. falling back to file order time\n", flow_1_ptr->number, flow_2_ptr->number); */
+        if(flow_1_ptr->input_file_order < flow_2_ptr->input_file_order) { // flow_1 goes first
+          return -1;
+        }
+        else if(flow_1_ptr->input_file_order > flow_2_ptr->input_file_order) { // flow_2 goes first
+          return 1;
+        }
+        else {
+          printf("We should never reach here. Somehow the threads were not able to agree on an ordering.\n");
+          exit(-1);
+        }
+      }
+    }
+  }
+}
 
 void releasePipe() {
   // signal on convar for other threads to wake up
@@ -92,37 +187,23 @@ void releasePipe() {
 }
 
 // entry point for each thread created
-// item is the Flow corresponding to this thread.
+// flow is the Flow corresponding to this thread.
 void *thread_func(void *flowItem) {
 
-  Flow *item = (Flow *)flowItem ;
+  Flow *flow = (Flow *)flowItem ;
 
-  /* printf("inside flow %i.\n", item->number); */
-  usleep(item->arrival_time_mis); // sleep for given number of microseconds until arriving
-  printf("flow %i Arrived\n", item->number);
+  usleep(flow->arrival_time_mis); // sleep for given number of microseconds until arriving
+  printf("flow %i Arrived\n", flow->number);
 
-  /* requestPipe(item) ; */
+  //request_pipe(flow) ;
   /* printf(Start...) */
 
   /* // sleep for transmission time */
   /* usleep(...) */
 
-  /* releasePipe(item); */
+  /* releasePipe(flow); */
   /* printf(Finish..); */
 }
-
-/* int main() { */
-/*   for(0 - numFlows) */
-/*     // create a thread for each flow */ 
-/*     pthread_create(&thread_list[i], NULL, thread_func, (void *)&flow_list[i]) ; */
-
-/*   // wait for all threads to terminate */
-/*   pthread_join(...) */
-
-/*     // destroy mutex & condition variable */
-
-/*     return 0; */
-/* } */
 
 int main(int argc, char **argv) {
   if(!argv[1]) {
@@ -146,10 +227,22 @@ int main(int argc, char **argv) {
     flow_list[i].arrival_time_mis = (int) arrival_time * 100000;
     flow_list[i].trans_time_mis = (int) trans_time * 100000;
     flow_list[i].priority = priority;
-    printf("read %i:%i,%i,%i\n", flow_number, arrival_time, trans_time, priority);
+    /* printf("read %i:%i,%i,%i\n", flow_number, arrival_time, trans_time, priority); */
     /* printf("read number: %i file_order: %i arrival_time: %i trans_time: %i priority: %i\n", flow_list[i].number, flow_list[i].input_file_order, flow_list[i].arrival_time_mis, flow_list[i].trans_time_mis, flow_list[i].priority); */
   }
   fclose(fp);
+
+
+  for(int i = 0; i < num_flows; i++) {
+    add_flow_to_queue(&flow_list[i]);
+  }
+
+  printf("\nQueue:\n");
+  for(int i = 0; i < queue_size; i++) {
+    printf("flow: %i\n", queue[i]->number);
+  }
+  printf("\n");
+  fflush(stdout);
 
   // initialize all of the flow threads
   for(int i = 0; i < num_flows; i++) {
