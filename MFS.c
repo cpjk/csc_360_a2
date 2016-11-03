@@ -44,8 +44,8 @@
 typedef struct Flow {
   int number;
   int input_file_order; // lower is closer to start - higher priority
-  int arrival_time_100ms;
-  int trans_time_100ms;
+  int arrival_time_mis;
+  int trans_time_mis;
   int priority; // 1-10 inclusive, highest to lowest priority
 } Flow;
 
@@ -97,11 +97,9 @@ void *thread_func(void *flowItem) {
 
   Flow *item = (Flow *)flowItem ;
 
-  printf("inside flow %i.\n", item->number);
-
-  /* // wait for arrival */
-  /* usleep(...) */
-  /*   printf(Arrive...); */
+  /* printf("inside flow %i.\n", item->number); */
+  usleep(item->arrival_time_mis); // sleep for given number of microseconds until arriving
+  printf("flow %i Arrived\n", item->number);
 
   /* requestPipe(item) ; */
   /* printf(Start...) */
@@ -145,10 +143,11 @@ int main(int argc, char **argv) {
     fscanf(fp, "%i:%i,%i,%i\n", &flow_number, &arrival_time, &trans_time, &priority);
     flow_list[i].number = flow_number;
     flow_list[i].input_file_order = i;
-    flow_list[i].arrival_time_100ms = arrival_time;
-    flow_list[i].trans_time_100ms = trans_time;
+    flow_list[i].arrival_time_mis = (int) arrival_time * 100000;
+    flow_list[i].trans_time_mis = (int) trans_time * 100000;
     flow_list[i].priority = priority;
     printf("read %i:%i,%i,%i\n", flow_number, arrival_time, trans_time, priority);
+    /* printf("read number: %i file_order: %i arrival_time: %i trans_time: %i priority: %i\n", flow_list[i].number, flow_list[i].input_file_order, flow_list[i].arrival_time_mis, flow_list[i].trans_time_mis, flow_list[i].priority); */
   }
   fclose(fp);
 
