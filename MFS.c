@@ -6,8 +6,8 @@
 typedef struct Flow {
   int id;
   int input_file_order; // lower is closer to start - higher priority
-  int arrival_time_10ms;
-  int trans_time_10ms;
+  int arrival_time_100ms;
+  int trans_time_100ms;
   unsigned int priority; // 1-10 inclusive, highest to lowest priority
 } Flow;
 
@@ -49,4 +49,24 @@ typedef struct Flow {
 // flow finishes transmission
 
 int main(int argc, char **argv) {
+  if(!argv[1]) {
+    printf("No file argument provided. Exiting.\n");
+    exit(-1);
+  }
+
+  // parse input file
+  FILE *fp;
+  fp = fopen(argv[1], "r");
+  int num_flows;
+
+  fscanf(fp, "%i\n", &num_flows);
+
+  Flow flow_list[num_flows];
+
+  printf("num flows: %i\n", num_flows);
+  for(int i = 0; i < num_flows; i++) {
+    unsigned int flow_number, arrival_time, trans_time, priority;
+    fscanf(fp, "%i:%i,%i,%i\n", &flow_number, &arrival_time, &trans_time, &priority);
+    printf("read %i:%i,%i,%i\n", flow_number, arrival_time, trans_time, priority);
+  }
 }
