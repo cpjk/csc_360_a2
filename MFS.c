@@ -4,11 +4,11 @@
 #include <pthread.h>
 
 typedef struct Flow {
-  int id;
+  int number;
   int input_file_order; // lower is closer to start - higher priority
   int arrival_time_100ms;
   int trans_time_100ms;
-  unsigned int priority; // 1-10 inclusive, highest to lowest priority
+  int priority; // 1-10 inclusive, highest to lowest priority
 } Flow;
 
 // constant number of flows
@@ -61,12 +61,22 @@ int main(int argc, char **argv) {
 
   fscanf(fp, "%i\n", &num_flows);
 
-  Flow flow_list[num_flows];
+  Flow *flow_list = malloc(sizeof(Flow) * num_flows);
 
   printf("num flows: %i\n", num_flows);
   for(int i = 0; i < num_flows; i++) {
-    unsigned int flow_number, arrival_time, trans_time, priority;
+    int flow_number, arrival_time, trans_time, priority;
     fscanf(fp, "%i:%i,%i,%i\n", &flow_number, &arrival_time, &trans_time, &priority);
+    flow_list[i].number = flow_number;
+    flow_list[i].input_file_order = i;
+    flow_list[i].arrival_time_100ms = arrival_time;
+    flow_list[i].trans_time_100ms = trans_time;
+    flow_list[i].priority = priority;
     printf("read %i:%i,%i,%i\n", flow_number, arrival_time, trans_time, priority);
+  }
+
+  for(int i = 0; i < num_flows; i++) {
+    printf("%i:%i,%i,%i, %i\n", flow_list[i].number, flow_list[i].input_file_order,
+        flow_list[i].arrival_time_100ms, flow_list[i].trans_time_100ms, flow_list[i].priority);
   }
 }
