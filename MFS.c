@@ -27,7 +27,7 @@
 // on the convar to be signalled again.
 // if we are at the front of the queue, remove ourself from the queue, release the lock, then return from request_pipe,
 // which causes us to transmit.
-// after transmitting, we call releasePipe, which signals to the convar, causing the waiting threads to contend for the transmission
+// after transmitting, we call release_pipe, which signals to the convar, causing the waiting threads to contend for the transmission
 //
 // num threads: main thread and one for each flow
 // the threads work independently
@@ -41,12 +41,13 @@
 #include <string.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <sys/time.h>
 
 typedef struct Flow {
   int number;
   int input_file_order; // lower is closer to start - higher priority
-  int arrival_time_mis;
-  int trans_time_mis;
+  int arrival_time_us;
+  int trans_time_us;
   int priority; // 1-10 inclusive, highest to lowest priority
 } Flow;
 
@@ -61,57 +62,10 @@ pthread_t thread_list[MAXFLOW]; // each thread executes one flow
 pthread_mutex_t trans_mtx = PTHREAD_MUTEX_INITIALIZER ;
 pthread_cond_t trans_cvar = PTHREAD_COND_INITIALIZER ;
 unsigned int pipe_activity;
+struct timeval start_time_timeval, curr_time_timeval;
 
 int comp_func(const void *, const void *);
 
-// wait on mutex to check queue and write to it
-// --> next, check if someone else is transmitting
-// if not, and no one else is on the queue, set pipe_activity = IN_USE
-// we set IN_USE inside the lock, and read it inside the lock.
-//
-// we set NOT_IN_USE outside the lock, but only the currently using thread can do this. will this be ok?
-// possibilities: pipe in use, other thread checks it, sees in use, waits.
-//                pipe in use, release use, other thread checks it, sees not in use, starts using
-//
-//                need to make sure we set NOT_IN_USE before signalling end of transmission
-
-// release mutex,
-
-// flow is the Flow corresponding to this thread
-/* void request_pipe(Flow *flow) { */
-/*   // lock mutex */
-/*   pthread_mutex_lock(&trans_mtx); */
-
-/*   // if the queue is empty and the pipe is not in use, start transmitting */
-/*   if(!queue[0] && pipe_activity == NOT_IN_USE) { */
-/*     printf("Flow %i found the queue empty.\n", flow->number); */
-/*     pipe_activity = IN_USE; */
-/*     pthread_mutex_unlock; */
-/*     return; */
-/*   } */
-/*   /1* if transmission pipe available && queue is empty { *1/ */
-/*   /1*   ...do some stuff.. *1/ */
-/*   /1*     unlock mutex; *1/ */
-/*   /1*   return ; *1/ */
-/*   /1* } *1/ */
-
-/*   // add flow to queue, sort the queue according rules */
-/*   add_flow_to_queue(flow); */
-
-/*   // printf(Waiting...); */
-/*   // key point here.. */
-/*   // wait till pipe to be available and be at the top of the queue */
-/*   while( not at front of queue ) { */
-/*     // wait till signalled AND then wait until can acquire lock */
-/*     // if signalled and can acquire the lock, we enter the next iteration of the loop, which will check if at front of queue. */
-/*     // if not, we re-wait on trans_cvar (unlock and wait) */
-/*     pthread_cond_wait(&trans_cvar, &trans_mtx); */
-/*   } */
-
-/*   // update queue */
-
-/*   pthread_mutex_unlock; */
-/* } */
 
 void remove_flow_from_queue(Flow *flow) {
   int found = 0;
@@ -178,18 +132,18 @@ int comp_func(const void *flow_1, const void *flow_2) {
   }
   else { // fall back to arrival time
     /* printf("%i and %i have same priority. falling back to arrival time\n", flow_1_ptr->number, flow_2_ptr->number); */
-    if(flow_1_ptr->arrival_time_mis < flow_2_ptr->arrival_time_mis) { // flow_1 goes first
+    if(flow_1_ptr->arrival_time_us < flow_2_ptr->arrival_time_us) { // flow_1 goes first
       return -1;
     }
-    else if(flow_1_ptr->arrival_time_mis > flow_2_ptr->arrival_time_mis) { // flow_2 goes first
+    else if(flow_1_ptr->arrival_time_us > flow_2_ptr->arrival_time_us) { // flow_2 goes first
       return 1;
     }
     else { // fall back to transmission time
       /* printf("%i and %i have same arrival time. falling back to trans time\n", flow_1_ptr->number, flow_2_ptr->number); */
-      if(flow_1_ptr->trans_time_mis < flow_2_ptr->trans_time_mis) { // flow_1 goes first
+      if(flow_1_ptr->trans_time_us < flow_2_ptr->trans_time_us) { // flow_1 goes first
         return -1;
       }
-      else if(flow_1_ptr->trans_time_mis > flow_2_ptr->trans_time_mis) { // flow_2 goes first
+      else if(flow_1_ptr->trans_time_us > flow_2_ptr->trans_time_us) { // flow_2 goes first
         return 1;
       }
       else { // fall back to input file order
@@ -209,9 +163,66 @@ int comp_func(const void *flow_1, const void *flow_2) {
   }
 }
 
-void releasePipe() {
+void release_pipe() {
   // signal on convar for other threads to wake up
+  pthread_cond_broadcast(&trans_cvar);
   // release the output pipe
+  pipe_activity = NOT_IN_USE;
+}
+
+// wait on mutex to check queue and write to it
+// --> next, check if someone else is transmitting
+// if not, and no one else is on the queue, set pipe_activity = IN_USE
+// we set IN_USE inside the lock, and read it inside the lock.
+//
+// we set NOT_IN_USE outside the lock, but only the currently using thread can do this. will this be ok?
+// possibilities: pipe in use, other thread checks it, sees in use, waits.
+//                pipe in use, release use, other thread checks it, sees not in use, starts using
+//
+//                need to make sure we set NOT_IN_USE before signalling end of transmission
+
+// release mutex,
+
+// flow is the Flow corresponding to this thread
+void request_pipe(Flow *flow) {
+  // lock mutex
+  /* printf("Flow %i is outside the critical section\n", flow->number); */
+  /* fflush(stdout); */
+  pthread_mutex_lock(&trans_mtx);
+
+  /* printf("Flow %i is inside the critical section.\n", flow->number); */
+  /* fflush(stdout); */
+
+  // if the queue is empty and the pipe is not in use, start transmitting
+  if(!queue[0] && pipe_activity == NOT_IN_USE) {
+    /* printf("Flow %i Found the queue empty.\n", flow->number); */
+    fflush(stdout);
+    pipe_activity = IN_USE;
+    pthread_mutex_unlock(&trans_mtx);
+    return;
+  }
+
+  // add flow to queue, sort the queue according rules
+  add_flow_to_queue(flow);
+
+  // wait till signalled AND then wait until can acquire lock
+  // if signalled and can acquire the lock, we enter the next iteration of the loop, which will check if at front of queue.
+  // if not, we re-wait on trans_cvar (unlock and wait)
+  while(queue[0]->number != flow->number || pipe_activity == IN_USE) {
+    gettimeofday(&curr_time_timeval, NULL);
+    printf("Flow %i waiting at  %ld\n",
+        flow->number,
+        ((curr_time_timeval.tv_sec - start_time_timeval.tv_sec) * 1000000L
+         + curr_time_timeval.tv_usec) - start_time_timeval.tv_usec);
+    fflush(stdout);
+    pthread_cond_wait(&trans_cvar, &trans_mtx);
+  }
+
+  // update queue
+  remove_flow_from_queue(flow);
+
+  // unlock mutex
+  pthread_mutex_unlock(&trans_mtx);
 }
 
 // entry point for each thread created
@@ -220,17 +231,32 @@ void *thread_func(void *flowItem) {
 
   Flow *flow = (Flow *)flowItem ;
 
-  usleep(flow->arrival_time_mis); // sleep for given number of microseconds until arriving
-  printf("flow %i Arrived\n", flow->number);
+  usleep(flow->arrival_time_us); // sleep for given number of microseconds until arriving
+  gettimeofday(&curr_time_timeval, NULL);
+  printf("Flow %i arriving at %ld\n",
+      flow->number,
+      ((curr_time_timeval.tv_sec - start_time_timeval.tv_sec) * 1000000L
+       + curr_time_timeval.tv_usec) - start_time_timeval.tv_usec);
+  fflush(stdout);
 
-  //request_pipe(flow) ;
-  /* printf(Start...) */
+  request_pipe(flow) ;
+  gettimeofday(&curr_time_timeval, NULL);
+  printf("Flow %i starting at %ld\n",
+      flow->number,
+      ((curr_time_timeval.tv_sec - start_time_timeval.tv_sec) * 1000000L
+       + curr_time_timeval.tv_usec) - start_time_timeval.tv_usec);
+  fflush(stdout);
 
-  /* // sleep for transmission time */
-  /* usleep(...) */
+  // sleep for transmission time
+  usleep(flow->trans_time_us);
 
-  /* releasePipe(flow); */
-  /* printf(Finish..); */
+  gettimeofday(&curr_time_timeval, NULL);
+  printf("Flow %i finished at %ld\n",
+      flow->number,
+      ((curr_time_timeval.tv_sec - start_time_timeval.tv_sec) * 1000000L
+       + curr_time_timeval.tv_usec) - start_time_timeval.tv_usec);
+  fflush(stdout);
+  release_pipe(flow);
 }
 
 int main(int argc, char **argv) {
@@ -246,30 +272,22 @@ int main(int argc, char **argv) {
 
   fscanf(fp, "%i\n", &num_flows);
 
-  /* printf("num flows: %i\n", num_flows); */
   for(int i = 0; i < num_flows; i++) {
     int flow_number, arrival_time, trans_time, priority;
     fscanf(fp, "%i:%i,%i,%i\n", &flow_number, &arrival_time, &trans_time, &priority);
     flow_list[i].number = flow_number;
     flow_list[i].input_file_order = i;
-    flow_list[i].arrival_time_mis = (int) arrival_time * 100000;
-    flow_list[i].trans_time_mis = (int) trans_time * 100000;
+    flow_list[i].arrival_time_us = (int) arrival_time * 100000;
+    flow_list[i].trans_time_us = (int) trans_time * 100000;
     flow_list[i].priority = priority;
-    /* printf("read %i:%i,%i,%i\n", flow_number, arrival_time, trans_time, priority); */
-    /* printf("read number: %i file_order: %i arrival_time: %i trans_time: %i priority: %i\n",
-     * flow_list[i].number,
-     * flow_list[i].input_file_order,
-     * flow_list[i].arrival_time_mis,
-     * flow_list[i].trans_time_mis,
-     * flow_list[i].priority); */
   }
   fclose(fp);
 
+  gettimeofday(&start_time_timeval, NULL);
   // initialize all of the flow threads
   for(int i = 0; i < num_flows; i++) {
     pthread_create(&thread_list[i], NULL, thread_func, (void *)&flow_list[i]) ;
   }
-
 
   // wait for all threads to complete
   for(int i = 0; i < num_flows; i++) {
