@@ -246,7 +246,7 @@ int main(int argc, char **argv) {
 
   fscanf(fp, "%i\n", &num_flows);
 
-  printf("num flows: %i\n", num_flows);
+  /* printf("num flows: %i\n", num_flows); */
   for(int i = 0; i < num_flows; i++) {
     int flow_number, arrival_time, trans_time, priority;
     fscanf(fp, "%i:%i,%i,%i\n", &flow_number, &arrival_time, &trans_time, &priority);
@@ -256,21 +256,14 @@ int main(int argc, char **argv) {
     flow_list[i].trans_time_mis = (int) trans_time * 100000;
     flow_list[i].priority = priority;
     /* printf("read %i:%i,%i,%i\n", flow_number, arrival_time, trans_time, priority); */
-    /* printf("read number: %i file_order: %i arrival_time: %i trans_time: %i priority: %i\n", flow_list[i].number, flow_list[i].input_file_order, flow_list[i].arrival_time_mis, flow_list[i].trans_time_mis, flow_list[i].priority); */
+    /* printf("read number: %i file_order: %i arrival_time: %i trans_time: %i priority: %i\n",
+     * flow_list[i].number,
+     * flow_list[i].input_file_order,
+     * flow_list[i].arrival_time_mis,
+     * flow_list[i].trans_time_mis,
+     * flow_list[i].priority); */
   }
   fclose(fp);
-
-
-  for(int i = 0; i < num_flows; i++) {
-    add_flow_to_queue(&flow_list[i]);
-  }
-
-  printf("\nQueue:\n");
-  for(int i = 0; i < queue_size; i++) {
-    printf("flow: %i\n", queue[i]->number);
-  }
-  printf("\n");
-  fflush(stdout);
 
   // initialize all of the flow threads
   for(int i = 0; i < num_flows; i++) {
