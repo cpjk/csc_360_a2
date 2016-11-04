@@ -27,6 +27,7 @@ unsigned int pipe_activity;
 struct timeval start_time_timeval, curr_time_timeval;
 
 int comp_func(const void *, const void *);
+int time_from_start_us();
 
 void remove_flow_from_queue(Flow *flow) {
   int found = 0;
@@ -155,11 +156,7 @@ void request_pipe(Flow *flow) {
   // if signalled and can acquire the lock, we enter the next iteration of the loop, which will check if at front of queue.
   // if not, we re-wait on trans_cvar (unlock and wait)
   while(queue[0]->number != flow->number || pipe_activity == IN_USE) {
-    gettimeofday(&curr_time_timeval, NULL);
-    printf("Flow %i waiting at  %ld\n",
-        flow->number,
-        ((curr_time_timeval.tv_sec - start_time_timeval.tv_sec) * 1000000L
-         + curr_time_timeval.tv_usec) - start_time_timeval.tv_usec);
+    printf("Flow %i waiting at  %ld\n", flow->number, time_from_start_us());
     fflush(stdout);
     pthread_cond_wait(&trans_cvar, &trans_mtx);
   }
@@ -167,8 +164,15 @@ void request_pipe(Flow *flow) {
   // update queue
   remove_flow_from_queue(flow);
 
+  pipe_activity = IN_USE;
   // unlock mutex
   pthread_mutex_unlock(&trans_mtx);
+}
+
+int time_from_start_us() {
+      gettimeofday(&curr_time_timeval, NULL);
+      return ((curr_time_timeval.tv_sec - start_time_timeval.tv_sec) * 1000000L
+       + curr_time_timeval.tv_usec) - start_time_timeval.tv_usec;
 }
 
 // entry point for each thread created
@@ -177,29 +181,17 @@ void *thread_func(void *flowItem) {
   Flow *flow = (Flow *)flowItem ;
 
   usleep(flow->arrival_time_us); // sleep for given number of microseconds until arriving
-  gettimeofday(&curr_time_timeval, NULL);
-  printf("Flow %i arriving at %ld\n",
-      flow->number,
-      ((curr_time_timeval.tv_sec - start_time_timeval.tv_sec) * 1000000L
-       + curr_time_timeval.tv_usec) - start_time_timeval.tv_usec);
+  printf("Flow %i arriving at %ld\n", flow->number, time_from_start_us());
   fflush(stdout);
 
-  request_pipe(flow) ;
-  gettimeofday(&curr_time_timeval, NULL);
-  printf("Flow %i starting at %ld\n",
-      flow->number,
-      ((curr_time_timeval.tv_sec - start_time_timeval.tv_sec) * 1000000L
-       + curr_time_timeval.tv_usec) - start_time_timeval.tv_usec);
+  request_pipe(flow);
+  printf("Flow %i starting at %ld\n", flow->number, time_from_start_us());
   fflush(stdout);
 
   // sleep for transmission time
   usleep(flow->trans_time_us);
 
-  gettimeofday(&curr_time_timeval, NULL);
-  printf("Flow %i finished at %ld\n",
-      flow->number,
-      ((curr_time_timeval.tv_sec - start_time_timeval.tv_sec) * 1000000L
-       + curr_time_timeval.tv_usec) - start_time_timeval.tv_usec);
+  printf("Flow %i finished at %ld\n", flow->number, time_from_start_us());
   fflush(stdout);
   release_pipe(flow);
 }
