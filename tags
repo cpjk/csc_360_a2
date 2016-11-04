@@ -1,0 +1,29 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.8	//
+Flow	MFS.c	/^typedef struct Flow {$/;"	s	file:
+Flow	MFS.c	/^} Flow;$/;"	t	typeref:struct:Flow	file:
+IN_USE	MFS.c	54;"	d	file:
+MAXFLOW	MFS.c	53;"	d	file:
+NOT_IN_USE	MFS.c	55;"	d	file:
+add_flow_to_queue	MFS.c	/^void add_flow_to_queue(Flow *flow) {$/;"	f
+arrival_time_mis	MFS.c	/^  int arrival_time_mis;$/;"	m	struct:Flow	file:
+comp_func	MFS.c	/^int comp_func(const void *flow_1, const void *flow_2) {$/;"	f
+flow_list	MFS.c	/^Flow flow_list[MAXFLOW];   \/\/ parse input in an array of flow$/;"	v
+input_file_order	MFS.c	/^  int input_file_order; \/\/ lower is closer to start - higher priority$/;"	m	struct:Flow	file:
+main	MFS.c	/^int main(int argc, char **argv) {$/;"	f
+number	MFS.c	/^  int number;$/;"	m	struct:Flow	file:
+pipe_activity	MFS.c	/^unsigned int pipe_activity;$/;"	v
+priority	MFS.c	/^  int priority; \/\/ 1-10 inclusive, highest to lowest priority$/;"	m	struct:Flow	file:
+queue	MFS.c	/^Flow *queue[MAXFLOW];  \/\/ store waiting flows while transmission pipe is occupied.$/;"	v
+queue_size	MFS.c	/^unsigned int queue_size = 0;$/;"	v
+releasePipe	MFS.c	/^void releasePipe() {$/;"	f
+remove_flow_from_queue	MFS.c	/^void remove_flow_from_queue(Flow *flow) {$/;"	f
+thread_func	MFS.c	/^void *thread_func(void *flowItem) {$/;"	f
+thread_list	MFS.c	/^pthread_t thread_list[MAXFLOW]; \/\/ each thread executes one flow$/;"	v
+trans_cvar	MFS.c	/^pthread_cond_t trans_cvar = PTHREAD_COND_INITIALIZER ;$/;"	v
+trans_mtx	MFS.c	/^pthread_mutex_t trans_mtx = PTHREAD_MUTEX_INITIALIZER ;$/;"	v
+trans_time_mis	MFS.c	/^  int trans_time_mis;$/;"	m	struct:Flow	file:

@@ -113,21 +113,49 @@ int comp_func(const void *, const void *);
 /*   pthread_mutex_unlock; */
 /* } */
 
+void remove_flow_from_queue(Flow *flow) {
+  int found = 0;
+
+  Flow *temp_queue[queue_size-1];
+
+  int temp_queue_index = 0;
+  for(int i = 0; i < queue_size; i++) {
+    if(queue[i]->number != flow->number) { // copy other queues into temp
+      temp_queue[temp_queue_index++] = queue[i];
+    }
+    else {
+      found = 1; // the flow was found in the queue
+    }
+  }
+
+  if(found != 1) { // the given flow was not present in the queue
+    printf("Flow %i not found in queue.\n", flow->number);
+    fflush(stdout);
+    return;
+  }
+
+  for(int i = 0; i < queue_size; i++) {
+    queue[i] = NULL; // set queue index to NULL
+  }
+
+  queue_size--;
+
+  for(int i = 0; i < queue_size; i++) {
+    queue[i] = temp_queue[i]; // copy remaining flows back into the queue
+  }
+
+
+  qsort(queue, queue_size, sizeof(Flow*), comp_func);
+}
+
 void add_flow_to_queue(Flow *flow) {
   if(queue_size == MAXFLOW) {
     printf("Max queue size limit reached.");
     exit(-1);
   }
 
-  printf("\n");
-  fflush(stdout);
   queue[queue_size] = flow;
   queue_size++;
-
-  printf("\nQueue before sorting:\n");
-  for(int i = 0; i < queue_size; i++) {
-    printf("flow: %i\n", queue[i]->number);
-  }
 
   qsort(queue, queue_size, sizeof(Flow*), comp_func);
 }
@@ -248,6 +276,7 @@ int main(int argc, char **argv) {
   for(int i = 0; i < num_flows; i++) {
     pthread_create(&thread_list[i], NULL, thread_func, (void *)&flow_list[i]) ;
   }
+
 
   // wait for all threads to complete
   for(int i = 0; i < num_flows; i++) {
