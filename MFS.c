@@ -1,41 +1,3 @@
-/*
- *
- * time calculation may be a nightware! 
- * Beware of float, int, unsigned int conversion.
- * you could use gettimeofday(...) to get down to microseconds!
- *
- * */
-
-/* typedef struct _flow */
-/* { */
-/*     float arrivalTime ; */
-/*     float transTime ; */
-/*     int priority ; */
-/*     int id ; */
-/* } flow; */
-
-// ALGORITHM:
-// read thread info
-// start all threads
-// each thread sleeps until it arrives, then tries to write to the output pipe by calling request_pipe
-// lock mutex
-// if pipe is available and the wait queue is empty, transmit and then release the lock
-// else, add yourself to the queue (we already have the lock, which will guard writing to the queue),
-//   re-sort the queue
-//   then enter a loop that will wait for you to be at the front of the queue and for the convar to be signalled
-// when convar is signalled, we try to acquire the lock, and then check if we are at the front of the queue. if not, re-wait
-// on the convar to be signalled again.
-// if we are at the front of the queue, remove ourself from the queue, release the lock, then return from request_pipe,
-// which causes us to transmit.
-// after transmitting, we call release_pipe, which signals to the convar, causing the waiting threads to contend for the transmission
-//
-// num threads: main thread and one for each flow
-// the threads work independently
-// mutexes: 1. to guard writing to the queue.
-// main thread will be idle
-// flows will be represented with structs that hold all the data about that thread
-//
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -65,7 +27,6 @@ unsigned int pipe_activity;
 struct timeval start_time_timeval, curr_time_timeval;
 
 int comp_func(const void *, const void *);
-
 
 void remove_flow_from_queue(Flow *flow) {
   int found = 0;
@@ -98,7 +59,6 @@ void remove_flow_from_queue(Flow *flow) {
     queue[i] = temp_queue[i]; // copy remaining flows back into the queue
   }
 
-
   qsort(queue, queue_size, sizeof(Flow*), comp_func);
 }
 
@@ -116,10 +76,6 @@ void add_flow_to_queue(Flow *flow) {
 
 // flow_1 and flow_2 are Flow **
 int comp_func(const void *flow_1, const void *flow_2) {
-  // -1 if flow_1 before flow_2
-  // 0 if same
-  // 1 if flow_2 goes before flow_1
-
   Flow *flow_1_ptr = *((Flow **) flow_1);
   Flow *flow_2_ptr = *((Flow **) flow_2);
 
@@ -131,7 +87,6 @@ int comp_func(const void *flow_1, const void *flow_2) {
     return 1;
   }
   else { // fall back to arrival time
-    /* printf("%i and %i have same priority. falling back to arrival time\n", flow_1_ptr->number, flow_2_ptr->number); */
     if(flow_1_ptr->arrival_time_us < flow_2_ptr->arrival_time_us) { // flow_1 goes first
       return -1;
     }
@@ -139,7 +94,6 @@ int comp_func(const void *flow_1, const void *flow_2) {
       return 1;
     }
     else { // fall back to transmission time
-      /* printf("%i and %i have same arrival time. falling back to trans time\n", flow_1_ptr->number, flow_2_ptr->number); */
       if(flow_1_ptr->trans_time_us < flow_2_ptr->trans_time_us) { // flow_1 goes first
         return -1;
       }
@@ -147,7 +101,6 @@ int comp_func(const void *flow_1, const void *flow_2) {
         return 1;
       }
       else { // fall back to input file order
-        /* printf("%i and %i have same trans time. falling back to file order time\n", flow_1_ptr->number, flow_2_ptr->number); */
         if(flow_1_ptr->input_file_order < flow_2_ptr->input_file_order) { // flow_1 goes first
           return -1;
         }
@@ -164,10 +117,8 @@ int comp_func(const void *flow_1, const void *flow_2) {
 }
 
 void release_pipe() {
-  // signal on convar for other threads to wake up
-  pthread_cond_broadcast(&trans_cvar);
-  // release the output pipe
-  pipe_activity = NOT_IN_USE;
+  pthread_cond_broadcast(&trans_cvar); // signal on convar for other threads to wake up
+  pipe_activity = NOT_IN_USE; // release the output pipe
 }
 
 // wait on mutex to check queue and write to it
@@ -186,12 +137,7 @@ void release_pipe() {
 // flow is the Flow corresponding to this thread
 void request_pipe(Flow *flow) {
   // lock mutex
-  /* printf("Flow %i is outside the critical section\n", flow->number); */
-  /* fflush(stdout); */
   pthread_mutex_lock(&trans_mtx);
-
-  /* printf("Flow %i is inside the critical section.\n", flow->number); */
-  /* fflush(stdout); */
 
   // if the queue is empty and the pipe is not in use, start transmitting
   if(!queue[0] && pipe_activity == NOT_IN_USE) {
@@ -228,7 +174,6 @@ void request_pipe(Flow *flow) {
 // entry point for each thread created
 // flow is the Flow corresponding to this thread.
 void *thread_func(void *flowItem) {
-
   Flow *flow = (Flow *)flowItem ;
 
   usleep(flow->arrival_time_us); // sleep for given number of microseconds until arriving
