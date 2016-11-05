@@ -1,1 +1,5 @@
-# csc_360_a2
+# CSC 320 Assignment 2
+
+## Usage
+
+`make && ./MFS input.txt`
