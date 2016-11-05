@@ -37,7 +37,8 @@ void remove_flow_from_queue(Flow *flow) {
   Flow *temp_queue[queue_size-1];
 
   int temp_queue_index = 0;
-  for(int i = 0; i < queue_size; i++) {
+  int i;
+  for(i = 0; i < queue_size; i++) {
     if(queue[i]->number != flow->number) { // copy other queues into temp
       temp_queue[temp_queue_index++] = queue[i];
     }
@@ -52,13 +53,13 @@ void remove_flow_from_queue(Flow *flow) {
     return;
   }
 
-  for(int i = 0; i < queue_size; i++) {
+  for(i = 0; i < queue_size; i++) {
     queue[i] = NULL; // set queue index to NULL
   }
 
   queue_size--;
 
-  for(int i = 0; i < queue_size; i++) {
+  for(i = 0; i < queue_size; i++) {
     queue[i] = temp_queue[i]; // copy remaining flows back into the queue
   }
 
@@ -221,7 +222,8 @@ int main(int argc, char **argv) {
 
   fscanf(fp, "%i\n", &num_flows);
 
-  for(int i = 0; i < num_flows; i++) {
+  int i;
+  for(i = 0; i < num_flows; i++) {
     int flow_number, arrival_time, trans_time, priority;
     fscanf(fp, "%i:%i,%i,%i\n", &flow_number, &arrival_time, &trans_time, &priority);
     flow_list[i].number = flow_number;
@@ -236,12 +238,12 @@ int main(int argc, char **argv) {
   gettimeofday(&start_time_timeval, NULL);
 
   // initialize all of the flow threads
-  for(int i = 0; i < num_flows; i++) {
+  for(i = 0; i < num_flows; i++) {
     pthread_create(&thread_list[i], NULL, thread_func, (void *)&flow_list[i]) ;
   }
 
   // wait for all threads to complete
-  for(int i = 0; i < num_flows; i++) {
+  for(i = 0; i < num_flows; i++) {
     pthread_join(thread_list[i], NULL) ;
   }
 
