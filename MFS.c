@@ -85,7 +85,7 @@ int comp_func(const void *flow_1, const void *flow_2) {
   Flow *flow_1_ptr = *((Flow **) flow_1);
   Flow *flow_2_ptr = *((Flow **) flow_2);
 
- // lower priority goes first
+  // lower priority goes first
   if(flow_1_ptr->priority < flow_2_ptr->priority) { // flow_1 goes first
     return -1;
   }
@@ -173,16 +173,16 @@ float secs_from_us(int us) {
   return ((float) us) / 1000000.0;
 }
 float time_from_start_us() {
-      gettimeofday(&curr_time_timeval, NULL);
-      float curr_time = (float) (
-        (
-           (curr_time_timeval.tv_sec - start_time_timeval.tv_sec)
-           * 1000000L
-           + curr_time_timeval.tv_usec
-        )
-        - start_time_timeval.tv_usec
+  gettimeofday(&curr_time_timeval, NULL);
+  float curr_time = (float) (
+      (
+       (curr_time_timeval.tv_sec - start_time_timeval.tv_sec)
+       * 1000000L
+       + curr_time_timeval.tv_usec
+      )
+      - start_time_timeval.tv_usec
       );
-      return  curr_time / 1000000.0;
+  return  curr_time / 1000000.0;
 }
 
 // entry point for each thread created
